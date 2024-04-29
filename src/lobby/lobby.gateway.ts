@@ -1,4 +1,5 @@
 import {
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
@@ -15,21 +16,50 @@ import { Logger } from '@nestjs/common';
   namespace: 'lobby',
 })
 export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  players = [];
+
   @WebSocketServer()
   server: Server;
 
   private logger: Logger = new Logger('AppGateway');
 
-  handleConnection(client: Socket, ...args: any[]) {
-    this.logger.log(`Client connected: ${client.id}`);
+  handleConnection(client: Socket, payload: any) {
+    this.logger.log(`Client connected:`, client, payload);
+    this.meID(client.id);
   }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('msgToServer')
-  handleMessage(client: Socket, payload: string): void {
-    this.server.emit('msgToClient', { payload });
+  meID(id: string) {
+    this.server.emit('meID', { id });
+  }
+
+  @SubscribeMessage('joinRoom')
+  joinRoom(@MessageBody() data: any) {
+    this.players = [
+      ...this.players,
+      {
+        id: data.id,
+        name: data.name,
+        point: undefined,
+      },
+    ];
+
+    this.getRoom();
+  }
+
+  @SubscribeMessage('setPoint')
+  setPoint(@MessageBody() data: any) {
+    this.players = this.players.map((player) =>
+      player.id === data.id ? { ...player, point: data.point } : player,
+    );
+
+    this.getRoom();
+  }
+
+  getRoom() {
+    this.server.emit('getRoom', this.players);
   }
 }
